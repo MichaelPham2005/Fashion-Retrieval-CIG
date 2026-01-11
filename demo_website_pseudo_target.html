@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CIG - Composed Image Retrieval with Pseudo-Target Generation</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+        padding: 20px;
+      }
+
+      .container {
+        max-width: 1600px;
+        margin: 0 auto;
+        background: white;
+        border-radius: 20px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        overflow: hidden;
+      }
+
+      .header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 30px;
+        text-align: center;
+      }
+
+      .header h1 {
+        font-size: 2.5em;
+        margin-bottom: 10px;
+      }
+
+      .header p {
+        font-size: 1.1em;
+        opacity: 0.9;
+      }
+
+      .header .approach-badge {
+        display: inline-block;
+        background: rgba(255, 255, 255, 0.2);
+        padding: 8px 20px;
+        border-radius: 20px;
+        margin-top: 10px;
+        font-size: 0.9em;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+      }
+
+      .main-content {
+        padding: 40px;
+      }
+
+      .input-section {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 30px;
+        margin-bottom: 40px;
+      }
+
+      .upload-box {
+        border: 3px dashed #667eea;
+        border-radius: 15px;
+        padding: 40px;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.3s;
+        background: #f8f9ff;
+      }
+
+      .upload-box:hover {
+        border-color: #764ba2;
+        background: #f0f2ff;
+      }
+
+      .upload-box.has-image {
+        border-style: solid;
+        border-color: #4caf50;
+      }
+
+      .preview-image {
+        max-width: 100%;
+        max-height: 300px;
+        border-radius: 10px;
+        margin-top: 15px;
+      }
+
+      .query-box {
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+      }
+
+      .query-box label {
+        font-weight: 600;
+        color: #333;
+        font-size: 1.1em;
+      }
+
+      .query-box textarea {
+        padding: 15px;
+        border: 2px solid #ddd;
+        border-radius: 10px;
+        font-size: 1em;
+        resize: vertical;
+        min-height: 120px;
+        font-family: inherit;
+      }
+
+      .query-box textarea:focus {
+        outline: none;
+        border-color: #667eea;
+      }
+
+      .example-queries {
+        background: #f8f9ff;
+        padding: 15px;
+        border-radius: 10px;
+        margin-top: 10px;
+      }
+
+      .example-queries p {
+        font-size: 0.9em;
+        color: #666;
+        margin-bottom: 8px;
+      }
+
+      .example-tag {
+        display: inline-block;
+        background: white;
+        padding: 5px 12px;
+        margin: 3px;
+        border-radius: 15px;
+        font-size: 0.85em;
+        cursor: pointer;
+        border: 1px solid #ddd;
+        transition: all 0.2s;
+      }
+
+      .example-tag:hover {
+        background: #667eea;
+        color: white;
+        border-color: #667eea;
+      }
+
+      .search-button {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        padding: 15px 50px;
+        font-size: 1.2em;
+        border-radius: 30px;
+        cursor: pointer;
+        box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        transition: all 0.3s;
+        display: block;
+        margin: 0 auto;
+      }
+
+      .search-button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(102, 126, 234, 0.5);
+      }
+
+      .search-button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .loading {
+        text-align: center;
+        padding: 40px;
+        display: none;
+      }
+
+      .loading.active {
+        display: block;
+      }
+
+      .spinner {
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid #667eea;
+        border-radius: 50%;
+        width: 50px;
+        height: 50px;
+        animation: spin 1s linear infinite;
+        margin: 0 auto 20px;
+      }
+
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+
+      .pseudo-target-section {
+        margin: 40px 0;
+        padding: 30px;
+        background: #f8f9ff;
+        border-radius: 15px;
+        border: 2px solid #667eea;
+        display: none;
+      }
+
+      .pseudo-target-section.active {
+        display: block;
+      }
+
+      .pseudo-target-section h3 {
+        color: #667eea;
+        margin-bottom: 15px;
+        text-align: center;
+      }
+
+      .pseudo-target-content {
+        display: flex;
+        align-items: center;
+        gap: 30px;
+      }
+
+      .pseudo-target-image {
+        max-width: 400px;
+        border-radius: 10px;
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+      }
+
+      .pseudo-target-info {
+        flex: 1;
+      }
+
+      .info-item {
+        background: white;
+        padding: 12px;
+        margin: 8px 0;
+        border-radius: 8px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .info-label {
+        font-weight: 600;
+        color: #666;
+      }
+
+      .info-value {
+        color: #667eea;
+        font-weight: 600;
+      }
+
+      .results-section {
+        margin-top: 40px;
+        display: none;
+      }
+
+      .results-section.active {
+        display: block;
+      }
+
+      .results-header {
+        margin-bottom: 20px;
+        padding-bottom: 15px;
+        border-bottom: 2px solid #eee;
+      }
+
+      .results-header h2 {
+        color: #333;
+      }
+
+      .results-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 20px;
+      }
+
+      .result-item {
+        border: 2px solid #eee;
+        border-radius: 10px;
+        overflow: hidden;
+        transition: all 0.3s;
+        cursor: pointer;
+      }
+
+      .result-item:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        border-color: #667eea;
+      }
+
+      .result-image {
+        width: 100%;
+        height: 250px;
+        object-fit: cover;
+      }
+
+      .result-info {
+        padding: 10px;
+        background: #f8f9ff;
+      }
+
+      .result-score {
+        font-size: 0.9em;
+        color: #667eea;
+        font-weight: 600;
+      }
+
+      .error-message {
+        background: #ffebee;
+        color: #c62828;
+        padding: 15px;
+        border-radius: 10px;
+        margin: 20px 0;
+        display: none;
+      }
+
+      .error-message.active {
+        display: block;
+      }
+
+      .workflow-diagram {
+        background: white;
+        padding: 20px;
+        border-radius: 10px;
+        margin-top: 10px;
+        border: 1px solid #ddd;
+      }
+
+      .workflow-step {
+        display: flex;
+        align-items: center;
+        margin: 10px 0;
+        font-size: 0.9em;
+      }
+
+      .workflow-step::before {
+        content: "→";
+        margin-right: 10px;
+        color: #667eea;
+        font-weight: bold;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h1>🎨 CIG: Composed Image Retrieval</h1>
+        <p>Generative Zero-Shot Composed Image Retrieval</p>
+        <div class="approach-badge">✨ Pseudo-Target Generation Approach</div>
+      </div>
+
+      <div class="main-content">
+        <div class="input-section">
+          <div
+            class="upload-box"
+            id="uploadBox"
+            onclick="document.getElementById('imageInput').click()"
+          >
+            <h3>📸 Upload Reference Image</h3>
+            <p>Click or drag an image here</p>
+            <input
+              type="file"
+              id="imageInput"
+              accept="image/*"
+              style="display: none"
+              onchange="handleImageUpload(event)"
+            />
+            <img
+              id="previewImage"
+              class="preview-image"
+              style="display: none"
+            />
+          </div>
+
+          <div class="query-box">
+            <label for="queryInput">✏️ Describe the modification:</label>
+            <textarea
+              id="queryInput"
+              placeholder="Example: more red color, without sleeves..."
+            ></textarea>
+
+            <div class="example-queries">
+              <p><strong>💡 Example queries:</strong></p>
+              <span
+                class="example-tag"
+                onclick="setQuery('change to red color')"
+                >change to red color</span
+              >
+              <span
+                class="example-tag"
+                onclick="setQuery('make it darker and longer sleeves')"
+                >make it darker and longer sleeves</span
+              >
+              <span class="example-tag" onclick="setQuery('add floral pattern')"
+                >add floral pattern</span
+              >
+              <span class="example-tag" onclick="setQuery('is more formal')"
+                >is more formal</span
+              >
+              <span class="example-tag" onclick="setQuery('has stripes')"
+                >has stripes</span
+              >
+            </div>
+
+            <div class="workflow-diagram">
+              <strong>🔄 Workflow:</strong>
+              <div class="workflow-step">
+                CLIP Vision extracts reference features
+              </div>
+              <div class="workflow-step">
+                Phi Network predicts pseudo tokens
+              </div>
+              <div class="workflow-step">
+                SDXL generates pseudo-target image
+              </div>
+              <div class="workflow-step">
+                Extract features from pseudo-target
+              </div>
+              <div class="workflow-step">Search database for similar items</div>
+            </div>
+          </div>
+        </div>
+
+        <button
+          class="search-button"
+          id="searchButton"
+          onclick="performSearch()"
+        >
+          🔍 Generate & Search
+        </button>
+
+        <div class="error-message" id="errorMessage"></div>
+
+        <div class="loading" id="loading">
+          <div class="spinner"></div>
+          <p>🎨 Generating pseudo-target image with SDXL...</p>
+          <p style="font-size: 0.9em; color: #666; margin-top: 10px">
+            This may take 10-30 seconds depending on your GPU
+          </p>
+        </div>
+
+        <div class="pseudo-target-section" id="pseudoTargetSection">
+          <h3>🎯 Generated Pseudo-Target Image</h3>
+          <div class="pseudo-target-content">
+            <img id="pseudoTargetImage" class="pseudo-target-image" />
+            <div class="pseudo-target-info">
+              <div class="info-item">
+                <span class="info-label">Generation Time:</span>
+                <span class="info-value" id="generationTime">-</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">Search Time:</span>
+                <span class="info-value" id="searchTime">-</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">Total Time:</span>
+                <span class="info-value" id="totalTime">-</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">Brightness:</span>
+                <span class="info-value" id="brightness">-</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">Attempts:</span>
+                <span class="info-value" id="attempts">-</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="results-section" id="resultsSection">
+          <div class="results-header">
+            <h2>🎯 Retrieved Results (<span id="resultCount">0</span>)</h2>
+          </div>
+          <div class="results-grid" id="resultsGrid"></div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      let uploadedImage = null;
+      const API_URL = "http://localhost:5000";
+
+      function handleImageUpload(event) {
+        const file = event.target.files[0];
+        if (file) {
+          uploadedImage = file;
+          const reader = new FileReader();
+          reader.onload = function (e) {
+            const preview = document.getElementById("previewImage");
+            preview.src = e.target.result;
+            preview.style.display = "block";
+            document.getElementById("uploadBox").classList.add("has-image");
+          };
+          reader.readAsDataURL(file);
+        }
+      }
+
+      function setQuery(text) {
+        document.getElementById("queryInput").value = text;
+      }
+
+      async function performSearch() {
+        // Validate inputs
+        if (!uploadedImage) {
+          showError("Please upload an image first");
+          return;
+        }
+
+        const query = document.getElementById("queryInput").value.trim();
+        if (!query) {
+          showError("Please enter a modification query");
+          return;
+        }
+
+        // Show loading
+        document.getElementById("loading").classList.add("active");
+        document
+          .getElementById("pseudoTargetSection")
+          .classList.remove("active");
+        document.getElementById("resultsSection").classList.remove("active");
+        document.getElementById("errorMessage").classList.remove("active");
+        document.getElementById("searchButton").disabled = true;
+
+        try {
+          // Prepare form data
+          const formData = new FormData();
+          formData.append("image", uploadedImage);
+          formData.append("query", query);
+          formData.append("top_k", "20");
+          formData.append("height", "512");
+          formData.append("width", "512");
+          formData.append("steps", "50");
+          formData.append("seed", "42");
+
+          // Call API
+          const response = await fetch(`${API_URL}/search`, {
+            method: "POST",
+            body: formData,
+          });
+
+          if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || "Server error");
+          }
+
+          const data = await response.json();
+
+          if (data.success) {
+            // Display pseudo-target image
+            displayPseudoTarget(data);
+
+            // Display search results
+            displayResults(data.results);
+          } else {
+            showError(data.error || "Unknown error");
+          }
+        } catch (error) {
+          showError(
+            `Error: ${error.message}. Make sure the API server is running.`
+          );
+        } finally {
+          document.getElementById("loading").classList.remove("active");
+          document.getElementById("searchButton").disabled = false;
+        }
+      }
+
+      function displayPseudoTarget(data) {
+        const section = document.getElementById("pseudoTargetSection");
+        const img = document.getElementById("pseudoTargetImage");
+
+        img.src = data.pseudo_target_image;
+
+        document.getElementById(
+          "generationTime"
+        ).textContent = `${data.generation_time.toFixed(2)}s`;
+        document.getElementById(
+          "searchTime"
+        ).textContent = `${data.search_time.toFixed(2)}s`;
+        document.getElementById(
+          "totalTime"
+        ).textContent = `${data.total_time.toFixed(2)}s`;
+        document.getElementById("brightness").textContent =
+          data.brightness.toFixed(1);
+        document.getElementById("attempts").textContent = data.attempts;
+
+        section.classList.add("active");
+      }
+
+      function displayResults(results) {
+        const resultsGrid = document.getElementById("resultsGrid");
+        const resultCount = document.getElementById("resultCount");
+
+        resultsGrid.innerHTML = "";
+        resultCount.textContent = results.length;
+
+        results.forEach((result, index) => {
+          const item = document.createElement("div");
+          item.className = "result-item";
+          item.innerHTML = `
+                    <img src="${result.url}" 
+                         alt="Result ${index + 1}" 
+                         class="result-image"
+                         onerror="this.src='https://via.placeholder.com/200x250?text=Image+Not+Found'" />
+                    <div class="result-info">
+                        <div class="result-score">
+                            Rank #${index + 1}<br>
+                            Score: ${(result.score * 100).toFixed(1)}%
+                        </div>
+                    </div>
+                `;
+          item.onclick = () => window.open(result.url, "_blank");
+          resultsGrid.appendChild(item);
+        });
+
+        document.getElementById("resultsSection").classList.add("active");
+      }
+
+      function showError(message) {
+        const errorDiv = document.getElementById("errorMessage");
+        errorDiv.textContent = message;
+        errorDiv.classList.add("active");
+        setTimeout(() => errorDiv.classList.remove("active"), 5000);
+      }
+
+      // Check API health on load
+      window.onload = async function () {
+        try {
+          const response = await fetch(`${API_URL}/health`);
+          const data = await response.json();
+          console.log("API Status:", data);
+
+          if (data.approach !== "Pseudo-Target Generation") {
+            showError(
+              "Warning: API is not using Pseudo-Target Generation approach"
+            );
+          }
+        } catch (error) {
+          showError(
+            "⚠️ Cannot connect to API server. Make sure to run: python api_pseudo_target.py"
+          );
+        }
+      };
+    </script>
+  </body>
+</html>

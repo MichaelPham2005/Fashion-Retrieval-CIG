@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CIG - Composed Image Retrieval (Colab Server)</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+        padding: 20px;
+      }
+
+      .container {
+        max-width: 1600px;
+        margin: 0 auto;
+        background: white;
+        border-radius: 20px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        overflow: hidden;
+      }
+
+      .header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 30px;
+        text-align: center;
+      }
+
+      .header h1 {
+        font-size: 2.5em;
+        margin-bottom: 10px;
+      }
+
+      .header p {
+        font-size: 1.1em;
+        opacity: 0.9;
+      }
+
+      .header .approach-badge {
+        display: inline-block;
+        background: rgba(255, 255, 255, 0.2);
+        padding: 8px 20px;
+        border-radius: 20px;
+        margin-top: 10px;
+        font-size: 0.9em;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+      }
+
+      /* Server URL Configuration */
+      .server-config {
+        background: #fff3cd;
+        border: 2px solid #ffc107;
+        border-radius: 10px;
+        padding: 20px;
+        margin: 20px 40px;
+      }
+
+      .server-config h3 {
+        color: #856404;
+        margin-bottom: 10px;
+      }
+
+      .server-input-group {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+      }
+
+      .server-input-group input {
+        flex: 1;
+        padding: 12px;
+        border: 2px solid #ffc107;
+        border-radius: 8px;
+        font-size: 1em;
+      }
+
+      .server-input-group button {
+        padding: 12px 24px;
+        background: #ffc107;
+        color: #856404;
+        border: none;
+        border-radius: 8px;
+        font-weight: bold;
+        cursor: pointer;
+        transition: all 0.3s;
+      }
+
+      .server-input-group button:hover {
+        background: #ffb300;
+      }
+
+      .server-status {
+        margin-top: 10px;
+        padding: 10px;
+        border-radius: 5px;
+        font-weight: bold;
+      }
+
+      .server-status.connected {
+        background: #d4edda;
+        color: #155724;
+      }
+
+      .server-status.disconnected {
+        background: #f8d7da;
+        color: #721c24;
+      }
+
+      .server-status.checking {
+        background: #d1ecf1;
+        color: #0c5460;
+      }
+
+      .main-content {
+        padding: 40px;
+      }
+
+      .input-section {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 30px;
+        margin-bottom: 40px;
+      }
+
+      .upload-box {
+        border: 3px dashed #667eea;
+        border-radius: 15px;
+        padding: 40px;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.3s;
+        background: #f8f9ff;
+      }
+
+      .upload-box:hover {
+        border-color: #764ba2;
+        background: #f0f2ff;
+      }
+
+      .upload-box.has-image {
+        border-style: solid;
+        border-color: #4caf50;
+      }
+
+      .preview-image {
+        max-width: 100%;
+        max-height: 300px;
+        border-radius: 10px;
+        margin-top: 15px;
+      }
+
+      .query-box {
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+      }
+
+      .query-box label {
+        font-weight: bold;
+        color: #333;
+        font-size: 1.1em;
+      }
+
+      .query-box textarea {
+        padding: 15px;
+        border: 2px solid #ddd;
+        border-radius: 10px;
+        font-size: 1em;
+        resize: vertical;
+        min-height: 100px;
+        font-family: inherit;
+      }
+
+      .query-box textarea:focus {
+        outline: none;
+        border-color: #667eea;
+      }
+
+      .search-button {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        padding: 15px 40px;
+        font-size: 1.2em;
+        border-radius: 10px;
+        cursor: pointer;
+        transition: transform 0.2s;
+        font-weight: bold;
+      }
+
+      .search-button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+      }
+
+      .search-button:disabled {
+        background: #ccc;
+        cursor: not-allowed;
+        transform: none;
+      }
+
+      /* Pseudo-Target Section */
+      .pseudo-target-section {
+        margin-bottom: 40px;
+        padding: 30px;
+        background: #f8f9ff;
+        border-radius: 15px;
+        border: 2px solid #667eea;
+      }
+
+      .pseudo-target-section h2 {
+        color: #667eea;
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .pseudo-target-content {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 30px;
+        align-items: start;
+      }
+
+      .pseudo-target-image {
+        max-width: 400px;
+        border-radius: 10px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      }
+
+      .pseudo-target-info {
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+      }
+
+      .info-item {
+        background: white;
+        padding: 15px;
+        border-radius: 8px;
+        border-left: 4px solid #667eea;
+      }
+
+      .info-item strong {
+        color: #667eea;
+        display: block;
+        margin-bottom: 5px;
+      }
+
+      /* Results Section */
+      .results-section {
+        margin-top: 40px;
+      }
+
+      .results-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+      }
+
+      .results-header h2 {
+        color: #333;
+      }
+
+      .results-stats {
+        color: #666;
+        font-size: 0.9em;
+      }
+
+      .results-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 20px;
+      }
+
+      .result-item {
+        background: #f8f9ff;
+        border-radius: 10px;
+        overflow: hidden;
+        transition: transform 0.2s;
+        cursor: pointer;
+        border: 2px solid transparent;
+      }
+
+      .result-item:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+        border-color: #667eea;
+      }
+
+      .result-image {
+        width: 100%;
+        height: 250px;
+        object-fit: cover;
+      }
+
+      .result-info {
+        padding: 15px;
+      }
+
+      .result-score {
+        font-weight: bold;
+        color: #667eea;
+        font-size: 1.1em;
+      }
+
+      .result-rank {
+        color: #999;
+        font-size: 0.9em;
+      }
+
+      .loading {
+        text-align: center;
+        padding: 60px;
+        color: #667eea;
+        font-size: 1.2em;
+      }
+
+      .loading::after {
+        content: "...";
+        animation: dots 1.5s infinite;
+      }
+
+      @keyframes dots {
+        0%,
+        20% {
+          content: ".";
+        }
+        40% {
+          content: "..";
+        }
+        60%,
+        100% {
+          content: "...";
+        }
+      }
+
+      .error {
+        background: #f8d7da;
+        color: #721c24;
+        padding: 20px;
+        border-radius: 10px;
+        margin: 20px 0;
+        border: 1px solid #f5c6cb;
+      }
+
+      .hidden {
+        display: none;
+      }
+
+      /* Advanced Options */
+      .advanced-options {
+        margin-top: 20px;
+        padding: 20px;
+        background: #f8f9ff;
+        border-radius: 10px;
+        border: 1px solid #ddd;
+      }
+
+      .advanced-options summary {
+        cursor: pointer;
+        font-weight: bold;
+        color: #667eea;
+        margin-bottom: 15px;
+      }
+
+      .option-group {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 15px;
+        margin-top: 15px;
+      }
+
+      .option-item {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+      }
+
+      .option-item label {
+        font-size: 0.9em;
+        color: #666;
+      }
+
+      .option-item input,
+      .option-item select {
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h1>🎨 Composed Image Retrieval</h1>
+        <p>
+          Generative Zero-Shot Composed Image Retrieval with Pseudo-Target
+          Generation
+        </p>
+        <div class="approach-badge">
+          ⚡ Pseudo-Target Generation • Google Colab Server
+        </div>
+      </div>
+
+      <!-- Server Configuration -->
+      <div class="server-config">
+        <h3>🌐 Colab Server Configuration</h3>
+        <div class="server-input-group">
+          <input
+            type="text"
+            id="serverUrl"
+            placeholder="Paste your ngrok URL here (e.g., https://xxxx-xx-xxx-xxx-xx.ngrok-free.app)"
+            value=""
+          />
+          <button onclick="testConnection()">Test Connection</button>
+        </div>
+        <div id="serverStatus" class="server-status disconnected">
+          ❌ Not connected - Please paste your Colab server URL
+        </div>
+        <p style="margin-top: 10px; color: #856404; font-size: 0.9em">
+          💡 <strong>Instructions:</strong>
+          <br />
+          1. Run the Colab notebook (colab_setup.ipynb)
+          <br />
+          2. Copy the ngrok public URL from the last cell
+          <br />
+          3. Paste it above and click "Test Connection"
+        </p>
+      </div>
+
+      <div class="main-content">
+        <!-- Input Section -->
+        <div class="input-section">
+          <div>
+            <div
+              class="upload-box"
+              id="uploadBox"
+              onclick="document.getElementById('imageInput').click()"
+            >
+              <div id="uploadPlaceholder">
+                <h3>📷 Upload Reference Image</h3>
+                <p>Click to select an image</p>
+                <p style="font-size: 0.9em; color: #999; margin-top: 10px">
+                  Supported: JPG, PNG, WebP
+                </p>
+              </div>
+              <img
+                id="previewImage"
+                class="preview-image hidden"
+                alt="Preview"
+              />
+            </div>
+            <input
+              type="file"
+              id="imageInput"
+              accept="image/*"
+              style="display: none"
+              onchange="handleImageUpload(event)"
+            />
+          </div>
+
+          <div class="query-box">
+            <label for="queryInput">💬 Modification Query</label>
+            <textarea
+              id="queryInput"
+              placeholder="Describe how you want to modify the reference image...&#10;&#10;Examples:&#10;• is red and has long sleeves&#10;• has a floral pattern&#10;• is more formal&#10;• has buttons"
+            ></textarea>
+
+            <details class="advanced-options">
+              <summary>⚙️ Advanced Options</summary>
+              <div class="option-group">
+                <div class="option-item">
+                  <label>Top-K Results</label>
+                  <input type="number" id="topK" value="20" min="5" max="50" />
+                </div>
+                <div class="option-item">
+                  <label>Image Size</label>
+                  <select id="imageSize">
+                    <option value="512">512x512 (Fast)</option>
+                    <option value="768">768x768 (Balanced)</option>
+                    <option value="1024" selected>1024x1024 (Best)</option>
+                  </select>
+                </div>
+                <div class="option-item">
+                  <label>Inference Steps</label>
+                  <input
+                    type="number"
+                    id="inferenceSteps"
+                    value="50"
+                    min="20"
+                    max="100"
+                  />
+                </div>
+                <div class="option-item">
+                  <label>Random Seed</label>
+                  <input type="number" id="seed" value="42" min="0" />
+                </div>
+              </div>
+            </details>
+
+            <button
+              class="search-button"
+              id="searchButton"
+              onclick="performSearch()"
+            >
+              🔍 Search with Pseudo-Target Generation
+            </button>
+          </div>
+        </div>
+
+        <!-- Pseudo-Target Section -->
+        <div id="pseudoTargetSection" class="pseudo-target-section hidden">
+          <h2>
+            <span>🎨</span>
+            <span>Generated Pseudo-Target Image</span>
+          </h2>
+          <div class="pseudo-target-content">
+            <img
+              id="pseudoTargetImage"
+              class="pseudo-target-image"
+              alt="Pseudo-Target"
+            />
+            <div class="pseudo-target-info">
+              <div class="info-item">
+                <strong>Generation Time</strong>
+                <span id="generationTime">-</span>
+              </div>
+              <div class="info-item">
+                <strong>Search Time</strong>
+                <span id="searchTime">-</span>
+              </div>
+              <div class="info-item">
+                <strong>Total Time</strong>
+                <span id="totalTime">-</span>
+              </div>
+              <div class="info-item">
+                <strong>Image Quality</strong>
+                <span id="imageQuality">-</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Results Section -->
+        <div id="resultsSection" class="results-section hidden">
+          <div class="results-header">
+            <h2>🎯 Retrieval Results</h2>
+            <div class="results-stats">
+              <span id="resultsCount">0 results</span>
+            </div>
+          </div>
+          <div id="resultsGrid" class="results-grid"></div>
+        </div>
+
+        <!-- Loading -->
+        <div id="loadingSection" class="loading hidden">
+          ⏳ Generating pseudo-target and searching database
+          <br />
+          <small style="color: #999"
+            >This may take 15-30 seconds on Colab GPU...</small
+          >
+        </div>
+
+        <!-- Error -->
+        <div id="errorSection" class="error hidden"></div>
+      </div>
+    </div>
+
+    <script>
+      let uploadedImage = null;
+      let serverBaseUrl = "";
+
+      function getServerUrl() {
+        const input = document.getElementById("serverUrl").value.trim();
+        if (!input) {
+          alert("⚠️ Please enter your Colab server URL first!");
+          return null;
+        }
+        // Remove trailing slash
+        return input.replace(/\/$/, "");
+      }
+
+      async function testConnection() {
+        const url = getServerUrl();
+        if (!url) return;
+
+        const statusDiv = document.getElementById("serverStatus");
+        statusDiv.className = "server-status checking";
+        statusDiv.textContent = "🔄 Testing connection...";
+
+        try {
+          const response = await fetch(`${url}/health`);
+          const data = await response.json();
+
+          if (response.ok) {
+            serverBaseUrl = url;
+            statusDiv.className = "server-status connected";
+            statusDiv.innerHTML = `
+              ✅ Connected to Colab server!
+              <br/>
+              <small style="font-size: 0.85em;">
+                GPU: ${data.device || "N/A"} • 
+                Database: ${data.database_size || 0} items • 
+                SDXL: ${data.sdxl_loaded ? "✅" : "❌"}
+              </small>
+            `;
+          } else {
+            throw new Error("Server responded with error");
+          }
+        } catch (error) {
+          statusDiv.className = "server-status disconnected";
+          statusDiv.innerHTML = `
+            ❌ Connection failed
+            <br/>
+            <small style="font-size: 0.85em;">
+              ${error.message || "Could not connect to server"}
+            </small>
+          `;
+        }
+      }
+
+      function handleImageUpload(event) {
+        const file = event.target.files[0];
+        if (file) {
+          uploadedImage = file;
+
+          const reader = new FileReader();
+          reader.onload = function (e) {
+            document.getElementById("previewImage").src = e.target.result;
+            document.getElementById("previewImage").classList.remove("hidden");
+            document
+              .getElementById("uploadPlaceholder")
+              .classList.add("hidden");
+            document.getElementById("uploadBox").classList.add("has-image");
+          };
+          reader.readAsDataURL(file);
+        }
+      }
+
+      async function performSearch() {
+        // Check server connection
+        if (!serverBaseUrl) {
+          alert("⚠️ Please test the server connection first!");
+          return;
+        }
+
+        // Validate inputs
+        if (!uploadedImage) {
+          alert("⚠️ Please upload a reference image first!");
+          return;
+        }
+
+        const query = document.getElementById("queryInput").value.trim();
+        if (!query) {
+          alert("⚠️ Please enter a modification query!");
+          return;
+        }
+
+        // Show loading, hide previous results
+        document.getElementById("loadingSection").classList.remove("hidden");
+        document.getElementById("pseudoTargetSection").classList.add("hidden");
+        document.getElementById("resultsSection").classList.add("hidden");
+        document.getElementById("errorSection").classList.add("hidden");
+        document.getElementById("searchButton").disabled = true;
+
+        try {
+          // Prepare form data
+          const formData = new FormData();
+          formData.append("image", uploadedImage);
+          formData.append("query", query);
+          formData.append("top_k", document.getElementById("topK").value);
+
+          const imageSize = document.getElementById("imageSize").value;
+          formData.append("height", imageSize);
+          formData.append("width", imageSize);
+
+          formData.append(
+            "steps",
+            document.getElementById("inferenceSteps").value
+          );
+          formData.append("seed", document.getElementById("seed").value);
+
+          console.log("Sending request to:", `${serverBaseUrl}/search`);
+
+          // Send request
+          const response = await fetch(`${serverBaseUrl}/search`, {
+            method: "POST",
+            body: formData,
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || "Search failed");
+          }
+
+          const data = await response.json();
+          console.log("Search results:", data);
+
+          // Display pseudo-target
+          displayPseudoTarget(data);
+
+          // Display results
+          displayResults(data.results);
+        } catch (error) {
+          console.error("Search error:", error);
+          document.getElementById(
+            "errorSection"
+          ).textContent = `❌ Error: ${error.message}`;
+          document.getElementById("errorSection").classList.remove("hidden");
+        } finally {
+          document.getElementById("loadingSection").classList.add("hidden");
+          document.getElementById("searchButton").disabled = false;
+        }
+      }
+
+      function displayPseudoTarget(data) {
+        // Show section
+        document
+          .getElementById("pseudoTargetSection")
+          .classList.remove("hidden");
+
+        // Display image
+        document.getElementById("pseudoTargetImage").src =
+          data.pseudo_target_image;
+
+        // Display timing info
+        document.getElementById(
+          "generationTime"
+        ).textContent = `${data.generation_time.toFixed(2)}s`;
+        document.getElementById(
+          "searchTime"
+        ).textContent = `${data.search_time.toFixed(2)}s`;
+        document.getElementById(
+          "totalTime"
+        ).textContent = `${data.total_time.toFixed(2)}s`;
+
+        // Display quality info
+        const qualityText = `Brightness: ${data.brightness.toFixed(1)} (${
+          data.attempts
+        } ${data.attempts === 1 ? "attempt" : "attempts"})`;
+        document.getElementById("imageQuality").textContent = qualityText;
+      }
+
+      function displayResults(results) {
+        const grid = document.getElementById("resultsGrid");
+        grid.innerHTML = "";
+
+        document.getElementById(
+          "resultsCount"
+        ).textContent = `${results.length} results`;
+        document.getElementById("resultsSection").classList.remove("hidden");
+
+        results.forEach((result, index) => {
+          const item = document.createElement("div");
+          item.className = "result-item";
+          item.onclick = () => window.open(result.url, "_blank");
+
+          item.innerHTML = `
+                    <img src="${result.url}" class="result-image" alt="Result ${
+            index + 1
+          }" 
+                         onerror="this.src='https://via.placeholder.com/200x250?text=Image+Not+Found'">
+                    <div class="result-info">
+                        <div class="result-rank">#${index + 1}</div>
+                        <div class="result-score">Score: ${result.score.toFixed(
+                          4
+                        )}</div>
+                    </div>
+                `;
+
+          grid.appendChild(item);
+        });
+      }
+
+      // Auto-test connection on page load if URL is already filled
+      window.addEventListener("load", () => {
+        const urlInput = document.getElementById("serverUrl");
+        if (urlInput.value.trim()) {
+          testConnection();
+        }
+      });
+    </script>
+  </body>
+</html>

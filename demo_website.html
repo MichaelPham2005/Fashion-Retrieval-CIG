@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Composed Image Retrieval Demo</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+        padding: 20px;
+      }
+
+      .container {
+        max-width: 1400px;
+        margin: 0 auto;
+        background: white;
+        border-radius: 20px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        overflow: hidden;
+      }
+
+      .header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 30px;
+        text-align: center;
+      }
+
+      .header h1 {
+        font-size: 2.5em;
+        margin-bottom: 10px;
+      }
+
+      .header p {
+        font-size: 1.1em;
+        opacity: 0.9;
+      }
+
+      .main-content {
+        padding: 40px;
+      }
+
+      .input-section {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 30px;
+        margin-bottom: 40px;
+      }
+
+      .upload-box {
+        border: 3px dashed #667eea;
+        border-radius: 15px;
+        padding: 40px;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.3s;
+        background: #f8f9ff;
+      }
+
+      .upload-box:hover {
+        border-color: #764ba2;
+        background: #f0f2ff;
+      }
+
+      .upload-box.has-image {
+        border-style: solid;
+        border-color: #4caf50;
+      }
+
+      .preview-image {
+        max-width: 100%;
+        max-height: 300px;
+        border-radius: 10px;
+        margin-top: 15px;
+      }
+
+      .query-box {
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+      }
+
+      .query-box label {
+        font-weight: 600;
+        color: #333;
+        font-size: 1.1em;
+      }
+
+      .query-box textarea {
+        padding: 15px;
+        border: 2px solid #ddd;
+        border-radius: 10px;
+        font-size: 1em;
+        resize: vertical;
+        min-height: 120px;
+        font-family: inherit;
+      }
+
+      .query-box textarea:focus {
+        outline: none;
+        border-color: #667eea;
+      }
+
+      .example-queries {
+        background: #f8f9ff;
+        padding: 15px;
+        border-radius: 10px;
+        margin-top: 10px;
+      }
+
+      .example-queries p {
+        font-size: 0.9em;
+        color: #666;
+        margin-bottom: 8px;
+      }
+
+      .example-tag {
+        display: inline-block;
+        background: white;
+        padding: 5px 12px;
+        margin: 3px;
+        border-radius: 15px;
+        font-size: 0.85em;
+        cursor: pointer;
+        border: 1px solid #ddd;
+        transition: all 0.2s;
+      }
+
+      .example-tag:hover {
+        background: #667eea;
+        color: white;
+        border-color: #667eea;
+      }
+
+      .search-button {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        padding: 15px 50px;
+        font-size: 1.2em;
+        border-radius: 30px;
+        cursor: pointer;
+        box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        transition: all 0.3s;
+        display: block;
+        margin: 0 auto;
+      }
+
+      .search-button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(102, 126, 234, 0.5);
+      }
+
+      .search-button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .loading {
+        text-align: center;
+        padding: 40px;
+        display: none;
+      }
+
+      .loading.active {
+        display: block;
+      }
+
+      .spinner {
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid #667eea;
+        border-radius: 50%;
+        width: 50px;
+        height: 50px;
+        animation: spin 1s linear infinite;
+        margin: 0 auto 20px;
+      }
+
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+
+      .results-section {
+        margin-top: 40px;
+        display: none;
+      }
+
+      .results-section.active {
+        display: block;
+      }
+
+      .results-header {
+        margin-bottom: 20px;
+        padding-bottom: 15px;
+        border-bottom: 2px solid #eee;
+      }
+
+      .results-header h2 {
+        color: #333;
+      }
+
+      .results-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 20px;
+      }
+
+      .result-item {
+        border: 2px solid #eee;
+        border-radius: 10px;
+        overflow: hidden;
+        transition: all 0.3s;
+        cursor: pointer;
+      }
+
+      .result-item:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        border-color: #667eea;
+      }
+
+      .result-image {
+        width: 100%;
+        height: 250px;
+        object-fit: cover;
+      }
+
+      .result-info {
+        padding: 10px;
+        background: #f8f9ff;
+      }
+
+      .result-score {
+        font-size: 0.9em;
+        color: #667eea;
+        font-weight: 600;
+      }
+
+      .error-message {
+        background: #ffebee;
+        color: #c62828;
+        padding: 15px;
+        border-radius: 10px;
+        margin: 20px 0;
+        display: none;
+      }
+
+      .error-message.active {
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h1>🎨 Composed Image Retrieval</h1>
+        <p>Upload an image and describe how you want to modify it</p>
+      </div>
+
+      <div class="main-content">
+        <div class="input-section">
+          <div
+            class="upload-box"
+            id="uploadBox"
+            onclick="document.getElementById('imageInput').click()"
+          >
+            <input
+              type="file"
+              id="imageInput"
+              accept="image/*"
+              style="display: none"
+              onchange="handleImageUpload(event)"
+            />
+            <div id="uploadPlaceholder">
+              <h3>📷 Upload Reference Image</h3>
+              <p>Click to select an image</p>
+            </div>
+            <img
+              id="previewImage"
+              class="preview-image"
+              style="display: none"
+            />
+          </div>
+
+          <div class="query-box">
+            <label for="queryInput">✏️ Describe the modification:</label>
+            <textarea
+              id="queryInput"
+              placeholder="E.g., more red color, without sleeves, longer, darker..."
+            ></textarea>
+
+            <div class="example-queries">
+              <p><strong>Example queries:</strong></p>
+              <span class="example-tag" onclick="setQuery('more red color')"
+                >more red color</span
+              >
+              <span class="example-tag" onclick="setQuery('without sleeves')"
+                >without sleeves</span
+              >
+              <span class="example-tag" onclick="setQuery('longer and darker')"
+                >longer and darker</span
+              >
+              <span class="example-tag" onclick="setQuery('more casual style')"
+                >more casual style</span
+              >
+              <span
+                class="example-tag"
+                onclick="setQuery('with floral pattern')"
+                >with floral pattern</span
+              >
+            </div>
+          </div>
+        </div>
+
+        <button
+          class="search-button"
+          id="searchButton"
+          onclick="performSearch()"
+        >
+          🔍 Search Similar Items
+        </button>
+
+        <div class="error-message" id="errorMessage"></div>
+
+        <div class="loading" id="loading">
+          <div class="spinner"></div>
+          <p>Searching for similar items...</p>
+        </div>
+
+        <div class="results-section" id="resultsSection">
+          <div class="results-header">
+            <h2>🎯 Search Results (<span id="resultCount">0</span> items)</h2>
+          </div>
+          <div class="results-grid" id="resultsGrid"></div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      let uploadedImage = null;
+      const API_URL = "http://localhost:5000";
+
+      function handleImageUpload(event) {
+        const file = event.target.files[0];
+        if (file) {
+          uploadedImage = file;
+          const reader = new FileReader();
+          reader.onload = function (e) {
+            document.getElementById("previewImage").src = e.target.result;
+            document.getElementById("previewImage").style.display = "block";
+            document.getElementById("uploadPlaceholder").style.display = "none";
+            document.getElementById("uploadBox").classList.add("has-image");
+          };
+          reader.readAsDataURL(file);
+        }
+      }
+
+      function setQuery(text) {
+        document.getElementById("queryInput").value = text;
+      }
+
+      async function performSearch() {
+        // Validate inputs
+        if (!uploadedImage) {
+          showError("Please upload an image first");
+          return;
+        }
+
+        const query = document.getElementById("queryInput").value.trim();
+        if (!query) {
+          showError("Please enter a modification query");
+          return;
+        }
+
+        // Show loading
+        document.getElementById("loading").classList.add("active");
+        document.getElementById("resultsSection").classList.remove("active");
+        document.getElementById("errorMessage").classList.remove("active");
+        document.getElementById("searchButton").disabled = true;
+
+        try {
+          // Prepare form data
+          const formData = new FormData();
+          formData.append("image", uploadedImage);
+          formData.append("query", query);
+          formData.append("top_k", "20");
+
+          // Call API
+          const response = await fetch(`${API_URL}/search`, {
+            method: "POST",
+            body: formData,
+          });
+
+          if (!response.ok) {
+            throw new Error("Search request failed");
+          }
+
+          const data = await response.json();
+
+          if (data.success) {
+            displayResults(data.results);
+          } else {
+            showError(data.error || "Search failed");
+          }
+        } catch (error) {
+          showError(
+            "Error: " + error.message + ". Make sure the API server is running."
+          );
+        } finally {
+          document.getElementById("loading").classList.remove("active");
+          document.getElementById("searchButton").disabled = false;
+        }
+      }
+
+      function displayResults(results) {
+        const resultsGrid = document.getElementById("resultsGrid");
+        const resultCount = document.getElementById("resultCount");
+
+        resultsGrid.innerHTML = "";
+        resultCount.textContent = results.length;
+
+        results.forEach((result, index) => {
+          const item = document.createElement("div");
+          item.className = "result-item";
+          item.innerHTML = `
+                    <img src="${result.url}" class="result-image" alt="Result ${
+            index + 1
+          }" 
+                         onerror="this.src='https://via.placeholder.com/200x250?text=Image+Not+Found'">
+                    <div class="result-info">
+                        <div class="result-score">Score: ${(
+                          result.score * 100
+                        ).toFixed(1)}%</div>
+                    </div>
+                `;
+          item.onclick = () => window.open(result.url, "_blank");
+          resultsGrid.appendChild(item);
+        });
+
+        document.getElementById("resultsSection").classList.add("active");
+      }
+
+      function showError(message) {
+        const errorDiv = document.getElementById("errorMessage");
+        errorDiv.textContent = message;
+        errorDiv.classList.add("active");
+        setTimeout(() => errorDiv.classList.remove("active"), 5000);
+      }
+
+      // Check API health on load
+      window.onload = async function () {
+        try {
+          const response = await fetch(`${API_URL}/health`);
+          const data = await response.json();
+          console.log("API Status:", data);
+        } catch (error) {
+          console.warn(
+            "API server not responding. Make sure to run: python api.py"
+          );
+        }
+      };
+    </script>
+  </body>
+</html>

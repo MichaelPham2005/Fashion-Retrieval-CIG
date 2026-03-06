@@ -28,12 +28,13 @@ import os
 import sys
 import base64
 import numpy as np
+import json
 from datetime import datetime
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, SCRIPT_DIR)
 
-from transformers import CLIPTextModelWithProjection, CLIPVisionModelWithProjection, CLIPImageProcessor
+from transformers import CLIPTextModelWithProjection, CLIPVisionModelWithProjection, CLIPImageProcessor, CLIPTokenizer
 from diffusers import AutoencoderKL, UNet2DConditionModel, StableDiffusionXLPipeline
 from phi import Phi
 import config
@@ -138,23 +139,70 @@ def load_models():
     # Load Phi model
     print("📥 Loading Phi model...")
     phi_vit_path = config.get_model_path('phi_vit')
-    phi_model = Phi(input_dim=768, hidden_dim=768 * 4, output_dim=768, dropout=0)
-    phi_model.load_state_dict(torch.load(phi_vit_path, map_location=device)[phi_model.__class__.__name__])
+    
+    # Check which CLIP model was loaded to determine correct dimensions
+    print(f"   CLIP model: {clip_model_name}")
+    print(f"   CLIP embedding dim: {clip_vision_model.config.projection_dim}")
+    
+    clip_dim = clip_vision_model.config.projection_dim
+    phi_model = Phi(input_dim=clip_dim, hidden_dim=clip_dim * 4, output_dim=clip_dim, dropout=0)
+    
+    try:
+        phi_state = torch.load(phi_vit_path, map_location=device)
+        phi_model.load_state_dict(phi_state[phi_model.__class__.__name__])
+        print(f"✅ Phi model loaded (dim: {clip_dim})")
+    except Exception as e:
+        print(f"⚠️  Error loading Phi state dict: {e}")
+        print(f"   Available keys: {list(phi_state.keys())}")
+        raise
+    
     phi_model = phi_model.to(device=device).eval()
     
     # Load SDXL pipeline
     print("📥 Loading SDXL pipeline (this may take a while)...")
     dtype = torch.float16 if device == 'cuda' else torch.float32
     
-    # Load UNet from checkpoint
+    # Load UNet from checkpoint - try multiple paths
     model_path = config.MODEL_PATHS['sdxl_checkpoint']
-    unet_path = os.path.join(model_path, 'checkpoint-20000', 'unet')
     
-    if not os.path.exists(unet_path):
-        print(f"⚠️  UNet not found at {unet_path}")
-        print(f"   Please ensure models/checkpoint-20000-SDXL/checkpoint-20000/unet/ exists")
-        sdxl_pipe = None
+    # Try different possible paths (prioritize correct Colab structure)
+    possible_unet_paths = [
+        os.path.join('models', 'checkpoint-20000', 'unet'),     # Colab structure: models/checkpoint-20000/unet/
+        os.path.join(SCRIPT_DIR, 'models', 'checkpoint-20000', 'unet'),  # Full path
+        os.path.join(model_path, 'checkpoint-20000', 'unet'),   # Config path + subfolder
+        os.path.join(model_path, 'unet'),                       # Direct unet folder
+    ]
+    
+    unet_path = None
+    for path in possible_unet_paths:
+        if os.path.exists(path):
+            unet_path = path
+            print(f"✅ Found UNet at: {unet_path}")
+            break
+    
+    if unet_path is None:
+        print(f"⚠️  UNet not found. Tried:")
+        for path in possible_unet_paths:
+            print(f"   - {path}")
+        print(f"\n💡 Using base SDXL model instead (results may be less accurate)")
+        
+        # Fallback: use base SDXL without fine-tuned UNet
+        vae = AutoencoderKL.from_pretrained(
+            config.SDXL_MODELS['vae'],
+            torch_dtype=dtype,
+            cache_dir=config.HF_CACHE_DIR
+        ).to(device)
+        
+        sdxl_pipe = StableDiffusionXLPipeline.from_pretrained(
+            config.SDXL_MODELS['base'],
+            vae=vae,
+            torch_dtype=dtype,
+            cache_dir=config.HF_CACHE_DIR
+        )
+        sdxl_pipe.to(device)
+        print("✅ SDXL pipeline loaded (base model)")
     else:
+        # Use fine-tuned UNet
         unet = UNet2DConditionModel.from_pretrained(
             unet_path, 
             use_safetensors=True, 
@@ -175,7 +223,7 @@ def load_models():
             cache_dir=config.HF_CACHE_DIR
         )
         sdxl_pipe.to(device)
-        print("✅ SDXL pipeline loaded")
+        print("✅ SDXL pipeline loaded (fine-tuned model)")
     
     # Load database embeddings
     print("📥 Loading database embeddings...")
@@ -271,10 +319,19 @@ def composed_search():
         with torch.no_grad():
             image_features = clip_vision_model(pixel_values).image_embeds
         
+        print(f"   Image features shape: {image_features.shape}")
+        
         # Step 2: Phi network
         print("2️⃣ Running Phi network...")
-        with torch.no_grad():
-            predicted_tokens = phi_model(image_features.to(torch.float32))
+        try:
+            with torch.no_grad():
+                predicted_tokens = phi_model(image_features.to(torch.float32))
+            print(f"   Predicted tokens shape: {predicted_tokens.shape}")
+        except RuntimeError as e:
+            print(f"❌ Phi network error: {e}")
+            print(f"   Image features shape: {image_features.shape}")
+            print(f"   Expected input dim: {phi_model.input_dim if hasattr(phi_model, 'input_dim') else 'unknown'}")
+            raise
         
         # Step 3: Encode text with pseudo tokens
         print("3️⃣ Encoding text with pseudo tokens...")
@@ -293,8 +350,38 @@ def composed_search():
         generation_start = datetime.now()
         
         # Prepare embeddings for SDXL
-        prompt_embeds = composed_last_hidden.to(dtype=sdxl_pipe.unet.dtype)
-        pooled_prompt_embeds = composed_embedding.to(dtype=sdxl_pipe.unet.dtype)
+        # SDXL requires:
+        # - prompt_embeds: text encoder hidden states (77, 2048) 
+        # - pooled_prompt_embeds: text encoder 2 pooled output (1280,)
+        
+        # We have composed_last_hidden from CLIP (77, 768)
+        # Need to project to SDXL text encoder 2 format
+        
+        # Use SDXL's text encoder 2 to get proper pooled embeddings
+        with torch.no_grad():
+            # Encode the composed text with SDXL's text encoder 2
+            text_encoder_2_output = sdxl_pipe.text_encoder_2(
+                tokenized,
+                output_hidden_states=True
+            )
+            # Get pooled output (1280 dim)
+            pooled_prompt_embeds = text_encoder_2_output[0]  # Pooled output
+            
+            # For prompt_embeds, we need to combine both text encoders
+            # Use composed embeddings from CLIP for text encoder 1
+            text_encoder_1_output = composed_last_hidden
+            
+            # Get text encoder 2 hidden states
+            text_encoder_2_hidden = text_encoder_2_output.hidden_states[-2]
+            
+            # Concatenate both text encoder outputs (SDXL expects this)
+            prompt_embeds = torch.cat([text_encoder_1_output, text_encoder_2_hidden], dim=-1)
+        
+        prompt_embeds = prompt_embeds.to(dtype=sdxl_pipe.unet.dtype)
+        pooled_prompt_embeds = pooled_prompt_embeds.to(dtype=sdxl_pipe.unet.dtype)
+        
+        print(f"   Prompt embeds shape: {prompt_embeds.shape}")
+        print(f"   Pooled prompt embeds shape: {pooled_prompt_embeds.shape}")
         
         # Generate with retry mechanism
         pseudo_target_image = None
@@ -395,6 +482,115 @@ def composed_search():
         }), 500
 
 
+@app.route('/refine', methods=['POST'])
+def refine_search():
+    """
+    Refine search based on user-selected relevant results
+    
+    Uses Rocchio algorithm: 
+    new_query = original_query + alpha * avg(relevant) - beta * avg(non_relevant)
+    """
+    try:
+        if database_embeddings is None or len(database_embeddings) == 0:
+            return jsonify({'error': 'Database not loaded'}), 500
+        
+        # Get inputs
+        query_text = request.form.get('query', '')
+        selected_json = request.form.get('selected_results', '[]')
+        iteration = int(request.form.get('iteration', 1))
+        top_k = int(request.form.get('top_k', 10))
+        alpha = float(request.form.get('alpha', 0.75))  # Weight for relevant docs
+        beta = float(request.form.get('beta', 0.15))    # Weight for non-relevant docs
+        
+        selected_items = json.loads(selected_json)
+        
+        if not selected_items:
+            return jsonify({'error': 'No selected results provided'}), 400
+        
+        print(f"\n{'='*50}")
+        print(f"🔄 Refinement Iteration {iteration}")
+        print(f"Selected {len(selected_items)} relevant items")
+        print(f"{'='*50}")
+        
+        # Extract features from selected relevant images
+        print("1️⃣ Computing centroid of relevant results...")
+        relevant_features = []
+        
+        for item in selected_items:
+            asin = item['asin']
+            if asin in database_embeddings:
+                relevant_features.append(database_embeddings[asin])
+        
+        if not relevant_features:
+            return jsonify({'error': 'Selected items not found in database'}), 400
+        
+        # Compute average of relevant features
+        relevant_features_tensor = torch.stack(relevant_features).to(device)
+        relevant_centroid = relevant_features_tensor.mean(dim=0)
+        
+        print(f"   Relevant centroid shape: {relevant_centroid.shape}")
+        
+        # Optionally: compute non-relevant centroid (from unselected results)
+        # For now, we'll use simpler approach: just use relevant centroid
+        
+        # Compute refined query embedding using Rocchio
+        # refined_query = alpha * relevant_centroid
+        refined_query = alpha * relevant_centroid
+        
+        # Normalize
+        refined_query = refined_query / refined_query.norm()
+        
+        # Search database with refined query
+        print("2️⃣ Searching with refined query...")
+        search_start = datetime.now()
+        
+        similarities = {}
+        for asin, db_embedding in database_embeddings.items():
+            db_embedding = db_embedding.to(device)
+            similarity = torch.nn.functional.cosine_similarity(
+                refined_query.unsqueeze(0),
+                db_embedding.unsqueeze(0)
+            ).item()
+            similarities[asin] = similarity
+        
+        # Get top-k results
+        sorted_results = sorted(similarities.items(), key=lambda x: x[1], reverse=True)[:top_k]
+        
+        search_time = (datetime.now() - search_start).total_seconds()
+        print(f"   ✅ Searched in {search_time:.2f}s")
+        
+        results = [
+            {
+                'asin': asin,
+                'url': url_mapping.get(asin, ''),
+                'score': float(score)
+            }
+            for asin, score in sorted_results
+        ]
+        
+        print(f"✅ Refinement complete! Found {len(results)} results")
+        print(f"{'='*50}\n")
+        
+        return jsonify({
+            'success': True,
+            'iteration': iteration,
+            'num_relevant': len(selected_items),
+            'num_results': len(results),
+            'results': results,
+            'search_time': search_time,
+            'method': 'Rocchio Relevance Feedback'
+        })
+    
+    except Exception as e:
+        import traceback
+        print(f"❌ Error in refinement: {e}")
+        print(traceback.format_exc())
+        return jsonify({
+            'error': str(e),
+            'traceback': traceback.format_exc()
+        }), 500
+
+
 @app.route('/stats', methods=['GET'])
 def get_stats():
     """Get database statistics"""
@@ -424,6 +620,7 @@ if __name__ == '__main__':
     print("\nEndpoints:")
     print("  - GET  /health  : Health check")
     print("  - POST /search  : Composed image search with pseudo-target generation")
+    print("  - POST /refine  : Refine search based on relevance feedback")
     print("  - GET  /stats   : Database statistics")
     print("\nServer will run on: http://localhost:5000")
     print("=" * 70 + "\n")

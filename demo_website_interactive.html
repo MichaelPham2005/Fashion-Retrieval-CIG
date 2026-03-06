@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CIG - Interactive Relevance Feedback</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+        padding: 20px;
+      }
+
+      .container {
+        max-width: 1800px;
+        margin: 0 auto;
+        background: white;
+        border-radius: 20px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        overflow: hidden;
+      }
+
+      .header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 30px;
+        text-align: center;
+      }
+
+      .header h1 {
+        font-size: 2.5em;
+        margin-bottom: 10px;
+      }
+
+      .header .approach-badge {
+        display: inline-block;
+        background: rgba(255, 255, 255, 0.2);
+        padding: 8px 20px;
+        border-radius: 20px;
+        margin-top: 10px;
+        font-size: 0.9em;
+      }
+
+      /* Server Config */
+      .server-config {
+        background: #fff3cd;
+        border: 2px solid #ffc107;
+        border-radius: 10px;
+        padding: 20px;
+        margin: 20px 40px;
+      }
+
+      .server-input-group {
+        display: flex;
+        gap: 10px;
+      }
+
+      .server-input-group input {
+        flex: 1;
+        padding: 12px;
+        border: 2px solid #ffc107;
+        border-radius: 8px;
+      }
+
+      .server-input-group button {
+        padding: 12px 24px;
+        background: #ffc107;
+        border: none;
+        border-radius: 8px;
+        font-weight: bold;
+        cursor: pointer;
+      }
+
+      .server-status {
+        margin-top: 10px;
+        padding: 10px;
+        border-radius: 5px;
+        font-weight: bold;
+      }
+
+      .server-status.connected {
+        background: #d4edda;
+        color: #155724;
+      }
+
+      .server-status.disconnected {
+        background: #f8d7da;
+        color: #721c24;
+      }
+
+      /* Main Content */
+      .main-content {
+        padding: 40px;
+      }
+
+      /* Iteration Counter */
+      .iteration-banner {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 20px;
+        border-radius: 15px;
+        margin-bottom: 30px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .iteration-banner h2 {
+        font-size: 1.5em;
+      }
+
+      .iteration-info {
+        text-align: right;
+      }
+
+      .iteration-info .count {
+        font-size: 2em;
+        font-weight: bold;
+      }
+
+      /* Input Section */
+      .input-section {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 30px;
+        margin-bottom: 40px;
+      }
+
+      .upload-box {
+        border: 3px dashed #667eea;
+        border-radius: 15px;
+        padding: 40px;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.3s;
+        background: #f8f9ff;
+      }
+
+      .upload-box:hover {
+        border-color: #764ba2;
+        background: #f0f2ff;
+      }
+
+      .upload-box.has-image {
+        border-style: solid;
+        border-color: #4caf50;
+      }
+
+      .preview-image {
+        max-width: 100%;
+        max-height: 300px;
+        border-radius: 10px;
+        margin-top: 15px;
+      }
+
+      .query-box {
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+      }
+
+      .query-box textarea {
+        padding: 15px;
+        border: 2px solid #ddd;
+        border-radius: 10px;
+        font-size: 1em;
+        resize: vertical;
+        min-height: 120px;
+      }
+
+      .search-button {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        padding: 15px 40px;
+        font-size: 1.2em;
+        border-radius: 10px;
+        cursor: pointer;
+        transition: transform 0.2s;
+        font-weight: bold;
+      }
+
+      .search-button:hover {
+        transform: translateY(-2px);
+      }
+
+      .search-button:disabled {
+        background: #ccc;
+        cursor: not-allowed;
+      }
+
+      .refine-button {
+        background: linear-gradient(135deg, #4caf50 0%, #45a049 100%);
+        color: white;
+        border: none;
+        padding: 15px 40px;
+        font-size: 1.2em;
+        border-radius: 10px;
+        cursor: pointer;
+        transition: transform 0.2s;
+        font-weight: bold;
+        display: none;
+      }
+
+      .refine-button:hover {
+        transform: translateY(-2px);
+      }
+
+      .refine-button.visible {
+        display: inline-block;
+      }
+
+      /* Selection Instructions */
+      .selection-instructions {
+        background: #e7f3ff;
+        border-left: 4px solid #2196f3;
+        padding: 20px;
+        border-radius: 10px;
+        margin-bottom: 30px;
+        display: none;
+      }
+
+      .selection-instructions.visible {
+        display: block;
+      }
+
+      .selection-instructions h3 {
+        color: #1976d2;
+        margin-bottom: 10px;
+      }
+
+      .selection-count {
+        font-size: 1.2em;
+        font-weight: bold;
+        color: #1976d2;
+        margin-top: 10px;
+      }
+
+      /* Results Section */
+      .results-section {
+        margin-top: 40px;
+      }
+
+      .results-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+      }
+
+      .results-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+        gap: 20px;
+      }
+
+      .result-item {
+        background: #f8f9ff;
+        border-radius: 10px;
+        overflow: hidden;
+        transition: all 0.3s;
+        cursor: pointer;
+        border: 3px solid transparent;
+        position: relative;
+      }
+
+      .result-item:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+      }
+
+      .result-item.selected {
+        border-color: #4caf50;
+        box-shadow: 0 0 20px rgba(76, 175, 80, 0.5);
+      }
+
+      .result-item.selected::after {
+        content: "✓";
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background: #4caf50;
+        color: white;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 24px;
+        font-weight: bold;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+      }
+
+      .result-image {
+        width: 100%;
+        height: 280px;
+        object-fit: cover;
+      }
+
+      .result-info {
+        padding: 15px;
+      }
+
+      .result-score {
+        font-weight: bold;
+        color: #667eea;
+        font-size: 1.1em;
+      }
+
+      .result-rank {
+        color: #999;
+        font-size: 0.9em;
+      }
+
+      /* Pseudo-Target Section */
+      .pseudo-target-section {
+        margin-bottom: 40px;
+        padding: 30px;
+        background: #f8f9ff;
+        border-radius: 15px;
+        border: 2px solid #667eea;
+      }
+
+      .pseudo-target-content {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 30px;
+      }
+
+      .pseudo-target-image {
+        max-width: 400px;
+        border-radius: 10px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      }
+
+      /* History Section */
+      .history-section {
+        margin-top: 40px;
+        padding: 30px;
+        background: #f5f5f5;
+        border-radius: 15px;
+      }
+
+      .history-item {
+        background: white;
+        padding: 20px;
+        border-radius: 10px;
+        margin-bottom: 15px;
+        border-left: 4px solid #667eea;
+      }
+
+      .history-item h4 {
+        color: #667eea;
+        margin-bottom: 10px;
+      }
+
+      .history-images {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-top: 10px;
+      }
+
+      .history-images img {
+        width: 80px;
+        height: 80px;
+        object-fit: cover;
+        border-radius: 5px;
+        border: 2px solid #4caf50;
+      }
+
+      .loading {
+        text-align: center;
+        padding: 60px;
+        color: #667eea;
+        font-size: 1.2em;
+      }
+
+      .error {
+        background: #f8d7da;
+        color: #721c24;
+        padding: 20px;
+        border-radius: 10px;
+        margin: 20px 0;
+      }
+
+      .hidden {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h1>🔄 Interactive Relevance Feedback</h1>
+        <p>Click on relevant results to refine your search iteratively</p>
+        <div class="approach-badge">
+          ⚡ Pseudo-Target + Interactive Refinement
+        </div>
+      </div>
+
+      <!-- Server Config -->
+      <div class="server-config">
+        <h3>🌐 Colab Server Configuration</h3>
+        <div class="server-input-group">
+          <input
+            type="text"
+            id="serverUrl"
+            placeholder="Paste ngrok URL"
+            value=""
+          />
+          <button onclick="testConnection()">Test Connection</button>
+        </div>
+        <div id="serverStatus" class="server-status disconnected">
+          ❌ Not connected
+        </div>
+      </div>
+
+      <div class="main-content">
+        <!-- Iteration Banner -->
+        <div id="iterationBanner" class="iteration-banner hidden">
+          <div>
+            <h2>🔍 Search Iteration</h2>
+            <p>Select relevant results and click "Refine Search"</p>
+          </div>
+          <div class="iteration-info">
+            <div class="count" id="iterationCount">1</div>
+            <div>Iteration</div>
+          </div>
+        </div>
+
+        <!-- Initial Input Section -->
+        <div id="initialInput" class="input-section">
+          <div>
+            <div
+              class="upload-box"
+              id="uploadBox"
+              onclick="document.getElementById('imageInput').click()"
+            >
+              <div id="uploadPlaceholder">
+                <h3>📷 Upload Reference Image</h3>
+                <p>Click to select</p>
+              </div>
+              <img
+                id="previewImage"
+                class="preview-image hidden"
+                alt="Preview"
+              />
+            </div>
+            <input
+              type="file"
+              id="imageInput"
+              accept="image/*"
+              style="display: none"
+              onchange="handleImageUpload(event)"
+            />
+          </div>
+
+          <div class="query-box">
+            <label><strong>💬 Modification Query</strong></label>
+            <textarea
+              id="queryInput"
+              placeholder="Describe modifications...&#10;e.g., is red and has long sleeves"
+            ></textarea>
+            <button
+              class="search-button"
+              id="searchButton"
+              onclick="performInitialSearch()"
+            >
+              🔍 Initial Search
+            </button>
+          </div>
+        </div>
+
+        <!-- Selection Instructions -->
+        <div id="selectionInstructions" class="selection-instructions">
+          <h3>👆 Select Relevant Results</h3>
+          <p>
+            Click on images that match your desired result. The system will use
+            your selections to refine the search.
+          </p>
+          <div class="selection-count">
+            Selected: <span id="selectedCount">0</span> images
+          </div>
+          <button
+            class="refine-button"
+            id="refineButton"
+            onclick="performRefinement()"
+          >
+            ✨ Refine Search with Selected Images
+          </button>
+        </div>
+
+        <!-- Pseudo-Target Section -->
+        <div id="pseudoTargetSection" class="pseudo-target-section hidden">
+          <h2>🎨 Generated Pseudo-Target</h2>
+          <div class="pseudo-target-content">
+            <img
+              id="pseudoTargetImage"
+              class="pseudo-target-image"
+              alt="Pseudo-Target"
+            />
+            <div>
+              <p>
+                <strong>Generation Time:</strong> <span id="genTime">-</span>
+              </p>
+              <p><strong>Total Time:</strong> <span id="totalTime">-</span></p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Results Section -->
+        <div id="resultsSection" class="results-section hidden">
+          <div class="results-header">
+            <h2>🎯 Results (Click to select relevant)</h2>
+            <div id="resultsCount">0 results</div>
+          </div>
+          <div id="resultsGrid" class="results-grid"></div>
+        </div>
+
+        <!-- History Section -->
+        <div id="historySection" class="history-section hidden">
+          <h2>📜 Search History</h2>
+          <div id="historyList"></div>
+        </div>
+
+        <!-- Loading -->
+        <div id="loadingSection" class="loading hidden">⏳ Processing...</div>
+
+        <!-- Error -->
+        <div id="errorSection" class="error hidden"></div>
+      </div>
+    </div>
+
+    <script>
+      let serverBaseUrl = "";
+      let uploadedImage = null;
+      let currentIteration = 0;
+      let selectedResults = new Set();
+      let searchHistory = [];
+      let currentResults = [];
+
+      // Test server connection
+      async function testConnection() {
+        const url = document.getElementById("serverUrl").value.trim();
+        if (!url) {
+          alert("Please enter server URL");
+          return;
+        }
+
+        const statusDiv = document.getElementById("serverStatus");
+        statusDiv.textContent = "Testing...";
+        statusDiv.className = "server-status";
+
+        try {
+          const response = await fetch(`${url}/health`, {
+            headers: { "ngrok-skip-browser-warning": "true" },
+          });
+          const data = await response.json();
+
+          if (response.ok) {
+            serverBaseUrl = url;
+            statusDiv.className = "server-status connected";
+            statusDiv.textContent = `✅ Connected (DB: ${data.database_size})`;
+          }
+        } catch (error) {
+          statusDiv.className = "server-status disconnected";
+          statusDiv.textContent = `❌ ${error.message}`;
+        }
+      }
+
+      // Handle image upload
+      function handleImageUpload(event) {
+        const file = event.target.files[0];
+        if (file) {
+          uploadedImage = file;
+          const reader = new FileReader();
+          reader.onload = function (e) {
+            document.getElementById("previewImage").src = e.target.result;
+            document.getElementById("previewImage").classList.remove("hidden");
+            document
+              .getElementById("uploadPlaceholder")
+              .classList.add("hidden");
+            document.getElementById("uploadBox").classList.add("has-image");
+          };
+          reader.readAsDataURL(file);
+        }
+      }
+
+      // Initial search
+      async function performInitialSearch() {
+        if (!serverBaseUrl) {
+          alert("Connect to server first");
+          return;
+        }
+        if (!uploadedImage) {
+          alert("Upload image first");
+          return;
+        }
+        const query = document.getElementById("queryInput").value.trim();
+        if (!query) {
+          alert("Enter query first");
+          return;
+        }
+
+        showLoading();
+        currentIteration = 1;
+        selectedResults.clear();
+
+        try {
+          const formData = new FormData();
+          formData.append("image", uploadedImage);
+          formData.append("query", query);
+          formData.append("top_k", "30");
+
+          const response = await fetch(`${serverBaseUrl}/search`, {
+            method: "POST",
+            body: formData,
+            headers: { "ngrok-skip-browser-warning": "true" },
+          });
+
+          const data = await response.json();
+          currentResults = data.results;
+
+          // Save to history
+          searchHistory.push({
+            iteration: currentIteration,
+            query: query,
+            selected: [],
+            results: data.results,
+            pseudoTarget: data.pseudo_target_image,
+          });
+
+          displayResults(data);
+          showIterationUI();
+        } catch (error) {
+          showError(error.message);
+        } finally {
+          hideLoading();
+        }
+      }
+
+      // Refine search based on selected results
+      async function performRefinement() {
+        if (selectedResults.size === 0) {
+          alert("Select at least one relevant image");
+          return;
+        }
+
+        showLoading();
+        currentIteration++;
+
+        try {
+          const selectedItems = Array.from(selectedResults).map((index) => ({
+            asin: currentResults[index].asin,
+            url: currentResults[index].url,
+          }));
+
+          const formData = new FormData();
+          formData.append("query", document.getElementById("queryInput").value);
+          formData.append("selected_results", JSON.stringify(selectedItems));
+          formData.append("iteration", currentIteration);
+          formData.append("top_k", "30");
+
+          const response = await fetch(`${serverBaseUrl}/refine`, {
+            method: "POST",
+            body: formData,
+            headers: { "ngrok-skip-browser-warning": "true" },
+          });
+
+          const data = await response.json();
+          currentResults = data.results;
+
+          // Save to history
+          searchHistory.push({
+            iteration: currentIteration,
+            query: "Refinement",
+            selected: selectedItems,
+            results: data.results,
+          });
+
+          selectedResults.clear();
+          displayResults(data);
+          updateHistory();
+        } catch (error) {
+          showError(error.message);
+        } finally {
+          hideLoading();
+        }
+      }
+
+      // Toggle result selection
+      function toggleSelection(index) {
+        if (selectedResults.has(index)) {
+          selectedResults.delete(index);
+        } else {
+          selectedResults.add(index);
+        }
+        updateSelectionUI();
+      }
+
+      // Update selection UI
+      function updateSelectionUI() {
+        document.getElementById("selectedCount").textContent =
+          selectedResults.size;
+        document
+          .getElementById("refineButton")
+          .classList.toggle("visible", selectedResults.size > 0);
+
+        // Update visual selection
+        document.querySelectorAll(".result-item").forEach((item, index) => {
+          item.classList.toggle("selected", selectedResults.has(index));
+        });
+      }
+
+      // Display results
+      function displayResults(data) {
+        if (data.pseudo_target_image) {
+          document.getElementById("pseudoTargetImage").src =
+            data.pseudo_target_image;
+          document.getElementById(
+            "genTime"
+          ).textContent = `${data.generation_time.toFixed(2)}s`;
+          document.getElementById(
+            "totalTime"
+          ).textContent = `${data.total_time.toFixed(2)}s`;
+          document
+            .getElementById("pseudoTargetSection")
+            .classList.remove("hidden");
+        }
+
+        const grid = document.getElementById("resultsGrid");
+        grid.innerHTML = "";
+
+        data.results.forEach((result, index) => {
+          const item = document.createElement("div");
+          item.className = "result-item";
+          item.onclick = () => toggleSelection(index);
+
+          item.innerHTML = `
+            <img src="${result.url}" class="result-image" alt="Result ${
+            index + 1
+          }" 
+                 onerror="this.src='https://via.placeholder.com/220x280?text=Error'">
+            <div class="result-info">
+              <div class="result-rank">#${index + 1}</div>
+              <div class="result-score">Score: ${result.score.toFixed(4)}</div>
+            </div>
+          `;
+
+          grid.appendChild(item);
+        });
+
+        document.getElementById(
+          "resultsCount"
+        ).textContent = `${data.results.length} results`;
+        document.getElementById("resultsSection").classList.remove("hidden");
+      }
+
+      // Show iteration UI
+      function showIterationUI() {
+        document.getElementById("iterationBanner").classList.remove("hidden");
+        document.getElementById("iterationCount").textContent =
+          currentIteration;
+        document
+          .getElementById("selectionInstructions")
+          .classList.add("visible");
+        document.getElementById("initialInput").style.display = "none";
+      }
+
+      // Update history
+      function updateHistory() {
+        const historyList = document.getElementById("historyList");
+        historyList.innerHTML = "";
+
+        searchHistory.forEach((item) => {
+          const historyItem = document.createElement("div");
+          historyItem.className = "history-item";
+
+          let selectedHTML = "";
+          if (item.selected.length > 0) {
+            selectedHTML = `
+              <p><strong>Selected ${
+                item.selected.length
+              } relevant images:</strong></p>
+              <div class="history-images">
+                ${item.selected
+                  .map((s) => `<img src="${s.url}" alt="Selected">`)
+                  .join("")}
+              </div>
+            `;
+          }
+
+          historyItem.innerHTML = `
+            <h4>Iteration ${item.iteration}</h4>
+            <p><strong>Query:</strong> ${item.query}</p>
+            ${selectedHTML}
+            <p><strong>Results:</strong> ${item.results.length} items</p>
+          `;
+
+          historyList.appendChild(historyItem);
+        });
+
+        document.getElementById("historySection").classList.remove("hidden");
+      }
+
+      // Utility functions
+      function showLoading() {
+        document.getElementById("loadingSection").classList.remove("hidden");
+        document.getElementById("errorSection").classList.add("hidden");
+      }
+
+      function hideLoading() {
+        document.getElementById("loadingSection").classList.add("hidden");
+      }
+
+      function showError(message) {
+        document.getElementById("errorSection").textContent = `❌ ${message}`;
+        document.getElementById("errorSection").classList.remove("hidden");
+      }
+    </script>
+  </body>
+</html>

@@ -237,7 +237,7 @@ Modify these values if you need to optimize for your hardware.
 ### Error: "UNet not found"
 
 - **Solution**: Check model path in `config.py`
-- Download SDXL weights from [link](https://drive.google.com/drive/folders/1hpIpI0X26ox-uY- QdOPKDKKZlnWkftIA?usp=drive_link)
+- Download SDXL weights from [Google Drive](https://drive.google.com/drive/folders/1hpIpI0X26ox-uY-QdOPKDKKZlnWkftIA?usp=drive_link)
 
 ### Error: "Database embeddings not found"
 
